@@ -11,54 +11,29 @@ class MoviesController < ApplicationController
   end
 
   def index
-    # get the parameters from the URI or the session
-    # if the session hasn't been modified yet, do the default of the newly opened webpage
-    reload = false
-    
+    @all_ratings = Movie.order(:rating).select(:rating).map(&:rating).uniq
+    tmp_bool = false
+
+    # check parameter first, update session using params. If no session and no params, use last session.
     if params[:ratings]
-      ratings = params[:ratings].keys
-      session[:ratings] = params[:ratings]
-    elsif session[:ratings]
-      reload = true
+      session[:ratings] = (params[:ratings].is_a?(Hash)) ? params[:ratings].keys : params[:ratings]
+    elsif session[:ratings] == nil
+      session[:ratings] = @all_ratings
     else
-      ratings = Movie.get_ratings_list
+      tmp_bool = true # do the redirect
     end
     
-    if params[:sort_by]
-      sort = params[:sort_by]
-      session[:sort_by] = params[:sort_by]
-    elsif session[:sort_by]
-      reload = true
-    else
-      sort = "none"
+    if params[:sort]
+      session[:sort] = params[:sort]
     end
     
-    # check if we need to redirect to get all the parameters in the URI
-    if reload
+    if tmp_bool
       flash.keep
-      redirect_to movies_path({:sort_by => session[:sort_by], :ratings => session[:ratings]})
-      return
-    end
-    
-    # get the list of possible ratings
-    ratings_list = Movie.get_ratings_list
-    @all_ratings = {}
-    
-    # determine which boxes need to remain checked
-    ratings_list.each do |rating|
-      @all_ratings[rating] = ratings.include?(rating)
-    end
-    
-    # get the list of movies
-    if sort == "title"
-      @movies = Movie.with_ratings(ratings).order(:title)
-      @hl_title = "hilite"
-    elsif sort == "date"
-      @movies = Movie.with_ratings(ratings).order(:release_date)
-      @hl_date = "hilite"
+      redirect_to movies_path(:sort => session[:sort], :ratings => session[:ratings])
     else
-      @movies = Movie.with_ratings(ratings)
+      @movies = (session[:sort]==nil) ? Movie.where(:rating => session[:ratings]) : Movie.order(session[:sort].to_sym).where(:rating => session[:ratings])
     end
+    
   end
 
   def new
@@ -88,5 +63,6 @@ class MoviesController < ApplicationController
     flash[:notice] = "Movie '#{@movie.title}' deleted."
     redirect_to movies_path
   end
+  
 
 end
