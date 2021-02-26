@@ -1,9 +1,5 @@
 class MoviesController < ApplicationController
 
-  def movie_params
-    params.require(:movie).permit(:title, :rating, :description, :release_date)
-  end
-
   def show
     id = params[:id] # retrieve movie ID from URI route
     @movie = Movie.find(id) # look up movie by unique ID
@@ -11,29 +7,22 @@ class MoviesController < ApplicationController
   end
 
   def index
-    @all_ratings = Movie.order(:rating).select(:rating).map(&:rating).uniq
-    tmp_bool = false
+    refer = request.referrer
+    if refer.nil? or not (refer.include? "amazonaws" or refer.include? "heroku") 
+      reset_session
+    end
+    
+    p = params[:home] ? params : session.to_hash
+    
+    # puts "Session " , session.to_hash
+    # puts "Params ", params
 
-    # check parameter first, update session using params. If no session and no params, use last session.
-    if params[:ratings]
-      session[:ratings] = (params[:ratings].is_a?(Hash)) ? params[:ratings].keys : params[:ratings]
-    elsif session[:ratings] == nil
-      session[:ratings] = @all_ratings
-    else
-      tmp_bool = true # do the redirect
-    end
-    
-    if params[:sort]
-      session[:sort] = params[:sort]
-    end
-    
-    if tmp_bool
-      flash.keep
-      redirect_to movies_path(:sort => session[:sort], :ratings => session[:ratings])
-    else
-      @movies = (session[:sort]==nil) ? Movie.where(:rating => session[:ratings]) : Movie.order(session[:sort].to_sym).where(:rating => session[:ratings])
-    end
-    
+    @ratings_to_show = p['ratings'] ? p['ratings'].map { |k,v| k } : []
+    @sort_by = p['sort_by']
+    @all_ratings = Movie.all_ratings
+    @movies = Movie.with_ratings @ratings_to_show, @sort_by
+
+    session.update ratings: @ratings_to_show, sort_by: @sort_by
   end
 
   def new
@@ -63,6 +52,11 @@ class MoviesController < ApplicationController
     flash[:notice] = "Movie '#{@movie.title}' deleted."
     redirect_to movies_path
   end
-  
 
+  private
+  # Making "internal" methods private is not required, but is a common practice.
+  # This helps make clear which methods respond to requests, and which ones do not.
+  def movie_params
+    params.require(:movie).permit(:title, :rating, :description, :release_date)
+  end
 end
